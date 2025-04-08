@@ -1,6 +1,7 @@
 from utils import  pinecone_search , extract_property_details_via_llm
 import openai
 import time
+import json
 from openai import OpenAI 
 import os
 from pydantic import BaseModel
@@ -83,6 +84,15 @@ Tools = [
 
 ]
 
+# def pinecone_search(query):
+#             print("Hi from pinecone_search",query)
+#             base_dir = os.path.dirname(__file__)
+#             file_path = os.path.join(base_dir, "prompts2.txt")
+#             with open(file_path, "r", encoding="utf-8") as f:
+#                 prompt = f.read()
+#             chat_history = update_chat_history(chat_history, prompt)
+#             search_results = pinecone_search(query)
+#             return search_results
 
 
 def Gpt_Search(query):
@@ -213,34 +223,34 @@ def format_chat_history(chathistory):
     system_prompt = {
         "role": "system",
         "content": """
-You are an engaging Property Chatbot focused on helping users find properties in India. 🏡✨  
+You are an engaging Property Chatbot focused on helping users find properties in India. 
 
-## *Response Format (STRICTLY FOLLOW THIS)*
-*Chatbot:* <Acknowledge user's choice with enthusiasm 🎉>  
-*Follow-Up Question:* <Ask the next relevant question ❓>  
-*Options:*  
+Response Format (STRICTLY FOLLOW THIS)
+Chatbot: <Acknowledge user's choice with enthusiasm 
+Follow-Up Question: <Ask the next relevant question 
+Options:  
 ✅ <Option 1>  
 ✅ <Option 2>  
 ✅ <Option 3>  
 ✅ <Option 4>  
 
-## *Rules (MUST BE FOLLOWED WITHOUT EXCEPTION)*  
-1. *Every response MUST contain exactly four options.* No exceptions.  
-2. *Every user input MUST trigger a structured response in the defined format.* The chatbot must never reply without listing four options.  
-3. *Do NOT repeat the phrase* "Follow-Up Question" inside the response message.  
-4. *Options must always be listed under the heading "Options:".*  
+Rules (MUST BE FOLLOWED WITHOUT EXCEPTION)  
+1. Every response MUST contain exactly four options. No exceptions.  
+2. Every user input MUST trigger a structured response in the defined format. The chatbot must never reply without listing four options.  
+3. Do NOT repeat the phrase "Follow-Up Question" inside the response message.  
+4. Options must always be listed under the heading "Options:".  
 5. Prefer Gurgoan Location.
 6. Format your response as valid JSON.
 
 Critical Enforcement of the 5th Point: 
-🔹 *After exactly 5-6 interactions, the chatbot **MUST* ask the user:  
-   "Would you like to see property options now, or continue refining your search? 🤔"  
+ After exactly 5-6 interactions, the chatbot MUST ask the user:  
+   "Would you like to see property options now, or continue refining your search? "  
 
 Options:
-   🔍 See property options now  
-   🎯 Refine search further  
-   ➕ Add more preferences  
-   🔄 Start over  
+    See property options now  
+    Refine search further  
+    Add more preferences  
+    Start over  
 """
     }
 
@@ -324,75 +334,26 @@ async def property_chatbot(request: Request):
                 # First check the raw content to debug
                 raw_content = choice.message.content
                 print(f"Raw response content: {raw_content}")
-                
-                # Try to parse as general JSON first
-                # import json
-                # try:
-                #     parsed_json = json.loads(raw_content)
+                try:
+                    # First, try to parse it as JSON
+                    response_dict = json.loads(raw_content)
                     
-                #     # Check if the required fields exist, if not, create a properly structured response
-                #     if "bot_reply" not in parsed_json or "followupMessage" not in parsed_json or "Options" not in parsed_json:
-                #         # This indicates the model didn't follow the expected format
-                #         # Create a properly structured response
-                #         structured_response = {
-                #             "bot_reply": "I found some information about properties that match your criteria.",
-                #             "followupMessage": "Would you like to see more details or refine your search?",
-                #             "Options": [
-                #                 "See more details",
-                #                 "Refine search",
-                #                 "Contact agent",
-                #                 "Start over"
-                #             ]
-                #         }
-                return JSONResponse(content=raw_content)
-            #         else:
-            #             # The JSON has the right structure, return it directly
-            #             return JSONResponse(content=parsed_json)
-                        
-            #     except json.JSONDecodeError:
-            #         # If it's not valid JSON at all, create a fallback response
-            #         fallback_response = {
-            #             "bot_reply": "I'm having trouble processing your request.",
-            #             "followupMessage": "Would you like to try a different search?",
-            #             "Options": [
-            #                 "Try different location",
-            #                 "Change budget range",
-            #                 "Change property type",
-            #                 "Start over"
-            #             ]
-            #         }
-            #         return JSONResponse(content=fallback_response)
-                    
-            # except Exception as e:
-            #     print(f"Error parsing response: {e}")
-            #     print(f"Raw response: {choice.message.content}")
-                
-            #     # Return a properly structured fallback response
-            #     fallback_response = {
-            #         "bot_reply": "I encountered an issue processing your property search.",
-            #         "followupMessage": "How would you like to proceed?",
-            #         "Options": [
-            #             "Try again",
-            #             "Start a new search",
-            #             "Search in a different area",
-            #             "Contact support"
-            #         ]
-            #     }
-            #     return JSONResponse(content=fallback_response)
-            # except Exception as e:
-            #     return JSONResponse(
-            #         status_code=500,
-            #         content={
-            #             "bot_reply": f"An error occurred: {str(e)}",
-            #             "followupMessage": "Would you like to try again?",
-            #             "Options": [
-            #                 "Retry search",
-            #                 "Start over",
-            #                 "Contact support",
-            #                 "Exit"
-            #             ]
-            #         }
-            #     )
+                    # Extract the relevant parts with proper handling
+                    formatted_response = {
+                        "Chatbot": response_dict.get("Chatbot", ""),
+                        "Follow-Up Question": response_dict.get("Question", ""),  # Note the key is "Question", not "Follow-Up Question"
+                        "Options": response_dict.get("Options", [])  # Note Options is an array, not an object
+                    }
+                except json.JSONDecodeError:
+                    # If it's not valid JSON, create a basic response
+                    formatted_response = {
+                        "Chatbot": raw_content,
+                        "Follow-Up Question": "",
+                        "Options": []
+                    }
+
+                return JSONResponse(content=formatted_response)
+            
 
 @app.post("/extra-details")
 async def get_extra_details(request: Request):
